@@ -1,0 +1,184 @@
+services:
+  # Base image service - builds the main Docker image
+  base_farm_image:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: farm_simulation:latest
+    container_name: base_farm_image
+    command: /bin/true  # Do nothing, just build the image
+
+  waypoint_generator:
+    image: farm_simulation:latest
+    depends_on:
+      - base_farm_image
+    container_name: waypoint_generator
+    environment:
+      - DISPLAY
+      - QT_X11_NO_MITSHM=1
+    volumes:
+      - $HOME/.Xauthority:/root/.Xauthority:rw
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - $PWD/src/:/catkin_ws/src/:rw
+      - $PWD/data:/data/:rw
+      - $PWD/../requirements.txt:/catkin_ws/requirements.txt:ro
+      - $PWD/../animal-insertion/:/catkin_ws/animal-insertion/:ro
+      - $PWD/../semantic-segmentation/:/catkin_ws/semantic-segmentation/:ro
+    working_dir: /catkin_ws/src/coverage_controller/src
+    command: >
+      bash -c "python3 generate_waypoints.py 
+      /catkin_ws/src/maps_file/las_files/map_0.las 
+      --desired_height 60 --plot --save_plot
+      --output_dir /catkin_ws/src/maps_file/mesh_files/map_0"
+
+  animal_waypoint_generator_optimized:
+    image: farm_simulation:latest
+    depends_on:
+      - base_farm_image
+    container_name: animal_waypoint_generator
+    environment:
+      - DISPLAY
+      - QT_X11_NO_MITSHM=1
+    volumes:
+      - $HOME/.Xauthority:/root/.Xauthority:rw
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - $PWD/src/:/catkin_ws/src/:rw
+      - $PWD/data:/data/:rw
+      - $PWD/../requirements.txt:/catkin_ws/requirements.txt:ro
+      - $PWD/../animal-insertion/:/catkin_ws/animal-insertion/:ro
+      - $PWD/../semantic-segmentation/:/catkin_ws/semantic-segmentation/:ro
+    working_dir: /catkin_ws/src/coverage_controller/src
+    command: >
+      bash -c "python3 generate_animal_waypoints.py 
+      /catkin_ws/src/maps_file/mesh_files/map_0/coordinates.txt 
+      --las_file /catkin_ws/src/maps_file/las_files/map_0.las
+      --texture_file /catkin_ws/src/maps_file/mesh_files/map_0/textura.jpeg
+      --strategy optimized
+      --desired_height 60 --plot --save_plot --plot_texture
+      --output_dir /catkin_ws/src/maps_file/mesh_files/map_0"
+
+  animal_waypoint_generator_naive:
+    image: farm_simulation:latest
+    depends_on:
+      - base_farm_image
+    container_name: animal_waypoint_generator_naive
+    environment:
+      - DISPLAY
+      - QT_X11_NO_MITSHM=1
+    volumes:
+      - $HOME/.Xauthority:/root/.Xauthority:rw
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - $PWD/src/:/catkin_ws/src/:rw
+      - $PWD/data:/data/:rw
+      - $PWD/../requirements.txt:/catkin_ws/requirements.txt:ro
+      - $PWD/../animal-insertion/:/catkin_ws/animal-insertion/:ro
+      - $PWD/../semantic-segmentation/:/catkin_ws/semantic-segmentation/:ro
+    working_dir: /catkin_ws/src/coverage_controller/src
+    command: >
+      bash -c "python3 generate_animal_waypoints.py 
+      /catkin_ws/src/maps_file/mesh_files/map_0/coordinates.txt 
+      --las_file /catkin_ws/src/maps_file/las_files/map_0.las
+      --texture_file /catkin_ws/src/maps_file/mesh_files/map_0/textura.jpeg
+      --strategy naive
+      --desired_height 60 --plot --save_plot --plot_texture
+      --output_dir /catkin_ws/src/maps_file/mesh_files/map_0"
+
+  animal_waypoint_generator_behavioral:
+    image: farm_simulation:latest
+    depends_on:
+      - base_farm_image
+    container_name: animal_waypoint_generator_behavioral
+    environment:
+      - DISPLAY
+      - QT_X11_NO_MITSHM=1
+    volumes:
+      - $HOME/.Xauthority:/root/.Xauthority:rw
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - $PWD/src/:/catkin_ws/src/:rw
+      - $PWD/data:/data/:rw
+      - $PWD/../requirements.txt:/catkin_ws/requirements.txt:ro
+      - $PWD/../animal-insertion/:/catkin_ws/animal-insertion/:ro
+      - $PWD/../semantic-segmentation/:/catkin_ws/semantic-segmentation/:ro
+    working_dir: /catkin_ws/src/coverage_controller/src
+    command: >
+      bash -c "python3 generate_animal_waypoints.py 
+      /catkin_ws/src/maps_file/mesh_files/map_0/coordinates.txt 
+      --las_file /catkin_ws/src/maps_file/las_files/map_0.las
+      --texture_file /catkin_ws/src/maps_file/mesh_files/map_0/textura.jpeg
+      --strategy behavioral
+      --cluster_radius 10
+      --spiral_resolution 8
+      --desired_height 60 --plot --save_plot --plot_texture
+      --output_dir /catkin_ws/src/maps_file/mesh_files/map_0"
+
+  gazebo_farm_sim:
+    image: farm_simulation:latest
+    depends_on:
+      - base_farm_image
+      #- waypoint_generator
+    container_name: gazebo_farm_sim
+    network_mode: host
+    environment:
+      - ROS_HOSTNAME=127.0.0.1
+      - ROS_MASTER_URI=http://127.0.0.1:11311
+      - DISPLAY
+      - PYTHONUNBUFFERED=1
+      - NVIDIA_VISIBLE_DEVICES=0
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - QT_X11_NO_MITSHM=1
+      - DISABLE_ROS1_EOL_WARNINGS=1
+      - CAMERA_FOV=${CAMERA_FOV:-15}
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    runtime: nvidia
+    volumes:
+      - $HOME/.Xauthority:/root/.Xauthority:rw
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - $PWD/src/:/catkin_ws/src/:rw
+      - $PWD/data:/data/:rw
+      - $PWD/../requirements.txt:/catkin_ws/requirements.txt:ro
+      - $PWD/../animal-insertion/:/catkin_ws/animal-insertion/:ro
+      - $PWD/../semantic-segmentation/:/catkin_ws/semantic-segmentation/:ro
+    privileged: true
+    command: >
+      bash -c "source /opt/ros/noetic/setup.bash && 
+      source /catkin_ws/devel/setup.bash && 
+      roslaunch coverage_controller quadrotor_world.launch 
+      my_world_name:=/catkin_ws/src/maps_file/mesh_files/map_0/map_0.world 
+      my_waypoints:=/catkin_ws/src/maps_file/mesh_files/map_0/animal_waypoints_behavioral.txt
+      caminho_output_default:=/catkin_ws/src/maps_file/mesh_files/map_0 
+      model_file:=/catkin_ws/src/maps_file/mesh_files/map_0/mesh.dae 
+      camera_fov:=$${CAMERA_FOV:-15}
+      gui:=false"
+
+  semantic_processor:
+    image: farm_simulation:latest
+    depends_on:
+      - base_farm_image
+      #- waypoint_generator
+    container_name: semantic_processor
+    environment:
+      - DISPLAY=${DISPLAY}
+    volumes:
+      - $PWD/src/:/catkin_ws/src/:rw
+      - $PWD/data:/data/:rw
+      - $PWD/../requirements.txt:/catkin_ws/requirements.txt:ro
+      - $PWD/../animal-insertion/:/catkin_ws/animal-insertion/:ro
+      - $PWD/../semantic-segmentation/:/catkin_ws/semantic-segmentation/:ro
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    working_dir: /catkin_ws/semantic-segmentation
+    command: >
+      bash -c "python3 semantic-render.py 
+      /catkin_ws/src/maps_file/mesh_files/map_0/info-file/ 
+      /catkin_ws/semantic-segmentation/camera_info.txt 
+      /catkin_ws/src/maps_file/mesh_files/map_0/mesh.dae 
+      /catkin_ws/src/maps_file/mesh_files/map_0/coordinates.txt 
+      /catkin_ws/src/maps_file/mesh_files/map_0/textura_semantic.png 
+      /catkin_ws/semantic-segmentation/robo_info.txt 
+      /catkin_ws/semantic-segmentation/world_translation.txt 
+      /catkin_ws/src/maps_file/mesh_files/map_0/semantic-segmentation"
+    profiles: ["semantic"]
