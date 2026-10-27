@@ -505,7 +505,8 @@ if __name__ == "__main__":
 
         # render
         # ------
-        glClearColor(1.0, 1.0, 1.0, 1.0)
+        #glClearColor(1.0, 1.0, 1.0, 1.0)
+        glClearColor(0.0, 0.0, 0.0, 1.0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
         # bind Texture
@@ -692,24 +693,36 @@ if __name__ == "__main__":
             glDrawElements(GL_TRIANGLES, indices_count[model_index], GL_UNSIGNED_INT, None)
 
         # Leitura dos pixels do framebuffer
-        pixels = glReadPixels(0, 0, SCR_WIDTH, SCR_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE)
-        image_data = np.frombuffer(pixels, dtype=np.uint8).reshape(SCR_HEIGHT, SCR_WIDTH, 4).copy()
+        pixels = glReadPixels(0, 0, SCR_WIDTH, SCR_HEIGHT, GL_RGB, GL_UNSIGNED_BYTE)
+        image_data = np.frombuffer(pixels, dtype=np.uint8).reshape(SCR_HEIGHT, SCR_WIDTH, 3).copy()
 
         # Inversão da imagem para que a parte superior seja no topo
         image_data = np.flipud(image_data)
 
-        # Descartar os canais vermelho e verde, mantendo apenas o azul
-        #image_data[:, :, 0] = 0  # Descartar canal vermelho
-        #image_data[:, :, 1] = 0  # Descartar canal verde
+        # Substituir as cores vivas dos objetos 3D pelos IDs exatos que o DeepLabV3 espera:
+        # Bull & Cow: Azul (0, 0, 255) -> Classe 6 (6, 6, 6)
+        #MUDANCA
+        mask_bull = (image_data[:, :, 0] == 0) & (image_data[:, :, 1] == 0) & (image_data[:, :, 2] == 255)
+        image_data[mask_bull] = [6, 6, 6]
 
-        # Criar uma nova imagem a partir dos dados modificados, mantendo a estrutura RGBA
-        image = Image.fromarray(image_data, 'RGBA')
+        # Tractor: Amarelo (255, 255, 0) -> Classe 7 (7, 7, 7)
+        mask_tractor = (image_data[:, :, 0] == 255) & (image_data[:, :, 1] == 255) & (image_data[:, :, 2] == 0)
+        image_data[mask_tractor] = [7, 7, 7]
 
-        # Converter a imagem para RGB, mantendo apenas o canal azul
-        #blue_channel = image_data[:, :, 2]  # Extrai apenas o canal azul
-        #image = Image.fromarray(blue_channel, 'L')  # 'L' para imagem em escala de cinza (um único canal)
+        # Pig: Rosa (1.0, 0.4, 0.7) -> (255, 102, 178 ou 179) -> Classe 8 (8, 8, 8)
+        mask_pig = (image_data[:, :, 0] == 255) & (image_data[:, :, 1] == 102) & (np.isin(image_data[:, :, 2], [178, 179]))
+        image_data[mask_pig] = [8, 8, 8]
 
-        # Salvar a imagem
+        # Horse: Roxo (0.5, 0.0, 0.5) -> (127 ou 128, 0, 127 ou 128) -> Classe 9 (9, 9, 9)
+        mask_horse = (np.isin(image_data[:, :, 0], [127, 128])) & (image_data[:, :, 1] == 0) & (np.isin(image_data[:, :, 2], [127, 128]))
+        image_data[mask_horse] = [9, 9, 9]
+
+        # Deer: Marrom (0.4, 0.26, 0.13) -> (102, 66, 33) -> Classe 10 (10, 10, 10)
+        mask_deer = (image_data[:, :, 0] == 102) & (image_data[:, :, 1] == 66) & (image_data[:, :, 2] == 33)
+        image_data[mask_deer] = [10, 10, 10]
+
+        # Criar a imagem em formato RGB (3 canais, como o OpenCV/PyTorch espera) e salvar em PNG sem compressão
+        image = Image.fromarray(image_data, 'RGB')
         image.save(out_path + "/" + key_f + ".png", format='PNG', compress_level=0)
 
         # glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
